@@ -6,19 +6,19 @@ import TaskCard from "../../components/TaskCard";
 
 
 // 🏠 HOME
-function DeveloperHome() {
+function DesignerHome() {
   const user = JSON.parse(localStorage.getItem("user"));
 
   return (
     <h2 className="text-2xl font-bold">
-      Welcome {user?.name} 👋
+      Welcome {user?.name} 🎨
     </h2>
   );
 }
 
 
-// 📋 TASKS
-function DevTasks() {
+// 📋 DESIGN TASKS
+function DesignTasks() {
   const [tasks, setTasks] = useState([]);
 
   useEffect(() => {
@@ -27,7 +27,7 @@ function DevTasks() {
 
   return (
     <>
-      <h2 className="text-xl font-bold mb-4">My Development Tasks</h2>
+      <h2 className="text-xl font-bold mb-4">My Design Tasks</h2>
 
       {tasks.map(task => (
         <TaskCard key={task._id} task={task} />
@@ -37,8 +37,8 @@ function DevTasks() {
 }
 
 
-// 📤 UPLOAD (ONLY IN-PROGRESS)
-function DevUpload() {
+// 📤 UPLOAD DESIGNS
+function UploadDesigns() {
   const [tasks, setTasks] = useState([]);
   const [submission, setSubmission] = useState({});
 
@@ -81,12 +81,12 @@ function DevUpload() {
 
   return (
     <>
-      <h2 className="text-xl font-bold mb-4">Upload Builds</h2>
+      <h2 className="text-xl font-bold mb-4">Upload Designs</h2>
 
       {tasks.map(task => (
         <TaskCard key={task._id} task={task}>
           <input
-            placeholder="Paste link"
+            placeholder="Paste design link"
             className="border p-2 w-full mt-2"
             onChange={(e) =>
               setSubmission({ ...submission, [task._id]: e.target.value })
@@ -95,7 +95,7 @@ function DevUpload() {
 
           <button
             onClick={() => submitWork(task._id)}
-            className="bg-blue-600 text-white px-4 py-2 mt-2"
+            className="bg-purple-600 text-white px-4 py-2 mt-2"
           >
             Submit
           </button>
@@ -107,7 +107,7 @@ function DevUpload() {
 
 
 // 📜 HISTORY
-function DevHistory() {
+function DesignHistory() {
   const [tasks, setTasks] = useState([]);
 
   useEffect(() => {
@@ -121,7 +121,7 @@ function DevHistory() {
 
   return (
     <>
-      <h2 className="text-xl font-bold mb-4">Task History</h2>
+      <h2 className="text-xl font-bold mb-4">Design History</h2>
 
       {tasks.map(task => (
         <TaskCard key={task._id} task={task} />
@@ -132,7 +132,7 @@ function DevHistory() {
 
 
 // 🔄 REVISIONS
-function DevRevisions() {
+function DesignRevisions() {
   const [tasks, setTasks] = useState([]);
 
   useEffect(() => {
@@ -146,7 +146,7 @@ function DevRevisions() {
 
   return (
     <>
-      <h2 className="text-xl font-bold mb-4">Revisions</h2>
+      <h2 className="text-xl font-bold mb-4">Revision Requests</h2>
 
       {tasks.map(task => (
         <TaskCard key={task._id} task={task} />
@@ -157,7 +157,7 @@ function DevRevisions() {
 
 
 // 🔔 NOTIFICATIONS
-function DevNotifications() {
+function DesignNotifications() {
   const [tasks, setTasks] = useState([]);
 
   useEffect(() => {
@@ -171,9 +171,7 @@ function DevNotifications() {
       {tasks.map(task => (
         <div key={task._id} className="bg-white p-4 mb-2 shadow">
           {task.comments.map((c, i) => (
-            <p key={i}>
-              📝 Comment: {c.text}
-            </p>
+            <p key={i}>📝 {c.text}</p>
           ))}
         </div>
       ))}
@@ -182,17 +180,17 @@ function DevNotifications() {
 }
 
 
-// MAIN
-export default function DeveloperDashboard() {
+// MAIN EXPORT
+export default function DesignerDashboard() {
   return (
     <DashboardLayout>
       <Routes>
-        <Route index element={<DeveloperHome />} />
-        <Route path="tasks" element={<DevTasks />} />
-        <Route path="upload" element={<DevUpload />} />
-        <Route path="history" element={<DevHistory />} />
-        <Route path="revisions" element={<DevRevisions />} />
-        <Route path="notifications" element={<DevNotifications />} />
+        <Route index element={<DesignerHome />} />
+        <Route path="tasks" element={<DesignTasks />} />
+        <Route path="upload" element={<UploadDesigns />} />
+        <Route path="history" element={<DesignHistory />} />
+        <Route path="revisions" element={<DesignRevisions />} />
+        <Route path="notifications" element={<DesignNotifications />} />
       </Routes>
     </DashboardLayout>
   );

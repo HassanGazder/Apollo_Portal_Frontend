@@ -3,20 +3,15 @@ import Header from "../components/Header";
 
 export default function DashboardLayout({ children }) {
   return (
-    <div className="flex h-screen bg-gray-100">
-
-      {/* Sidebar */}
+    <div className="min-h-screen flex bg-gray-50">
       <Sidebar />
 
-      {/* Main */}
-      <div className="flex-1 flex flex-col">
-
+      <div className="flex-1 min-w-0">
         <Header />
 
-        <div className="p-6 overflow-y-auto">
+        <main className="p-6">
           {children}
-        </div>
-
+        </main>
       </div>
     </div>
   );
