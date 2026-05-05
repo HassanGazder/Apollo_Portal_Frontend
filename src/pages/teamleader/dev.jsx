@@ -1,8 +1,10 @@
 import { Routes, Route } from "react-router-dom";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
+import { BarChart3, CheckCircle2, Clock, Layers3 } from "lucide-react";
 import DashboardLayout from "../../layouts/DashboardLayout";
 import API from "../../services/api";
 import TaskCard from "../../components/TaskCard";
+import Notifications from "../Notifications";
 
 
 // 🏠 HOME
@@ -35,6 +37,7 @@ function AllTasks() {
 
 // 👨‍💻 ASSIGN TASKS
 function AssignTasks() {
+  const user = JSON.parse(localStorage.getItem("user"));
   const [tasks, setTasks] = useState([]);
   const [users, setUsers] = useState([]);
 
@@ -47,7 +50,18 @@ function AssignTasks() {
   };
 
   useEffect(() => {
-    fetchData();
+    let ignore = false;
+
+    Promise.all([API.get("/tasks"), API.get("/users")]).then(([taskRes, userRes]) => {
+      if (ignore) return;
+
+      setTasks(taskRes.data);
+      setUsers(userRes.data.filter(u => u.role === "developer"));
+    });
+
+    return () => {
+      ignore = true;
+    };
   }, []);
 
   const assign = async (taskId, userId) => {
@@ -60,20 +74,38 @@ function AssignTasks() {
       <h2 className="text-xl font-bold mb-4">Assign Tasks</h2>
 
       {tasks.map(task => (
-        <TaskCard key={task._id} task={task}>
-          <select
-            className="border p-2 mt-2 w-full"
-            onChange={(e) => assign(task._id, e.target.value)}
-          >
-            <option>Select Developer</option>
-            {users.map(u => (
-              <option key={u._id} value={u._id}>
-                {u.name}
-              </option>
-            ))}
-          </select>
-        </TaskCard>
-      ))}
+  <TaskCard key={task._id} task={task}>
+
+    {/* 🔽 SHOW ASSIGN ONLY IF NOT COMPLETED */}
+    {task.status !== "completed" && (
+      <select
+        defaultValue=""
+        className="mt-3 w-full rounded-lg border border-slate-700 bg-slate-950/70 p-3 text-sm font-medium text-slate-100 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/30"
+        onChange={(e) => assign(task._id, e.target.value)}
+      >
+        <option value="" disabled className="bg-white text-black">
+          Select Developer
+        </option>
+        {users.map(u => (
+          <option className="bg-white text-black" key={u._id} value={u._id}>
+            {u.name}
+          </option>
+        ))}
+      </select>
+    )}
+
+    {/* 🔁 TAKE BACK TASK */}
+    {task.status !== "completed" && (
+      <button
+        onClick={() => assign(task._id, user._id)}
+        className="mt-3 w-full rounded-lg border border-red-500/30 bg-red-500/10 p-3 text-sm font-semibold text-red-200 transition hover:bg-red-500/20 hover:text-white"
+      >
+        Take Back Task
+      </button>
+    )}
+
+  </TaskCard>
+))}
     </>
   );
 }
@@ -82,49 +114,205 @@ function AssignTasks() {
 // 🔍 WORK REVIEW
 function WorkReview() {
   const [tasks, setTasks] = useState([]);
+  const [comments, setComments] = useState({});
+  const [message, setMessage] = useState("");
+  const [error, setError] = useState("");
+
+  const fetchReviewTasks = useCallback(async () => {
+    const res = await API.get("/tasks");
+    setTasks(res.data.filter(t => t.reviewSubmission && t.reviewStatus === "pending" && !t.submission));
+  }, []);
 
   useEffect(() => {
-    API.get("/tasks").then(res => {
-      const completed = res.data.filter(t => t.submission);
-      setTasks(completed);
+    let ignore = false;
+
+    API.get("/tasks").then((res) => {
+      if (ignore) return;
+      setTasks(res.data.filter(t => t.reviewSubmission && t.reviewStatus === "pending" && !t.submission));
     });
+
+    return () => {
+      ignore = true;
+    };
   }, []);
+
+  const reviewTask = async (taskId, decision) => {
+    setMessage("");
+    setError("");
+
+    try {
+      await API.put("/tasks/review-submission", {
+        taskId,
+        decision,
+        comment: comments[taskId],
+      });
+
+      setComments({ ...comments, [taskId]: "" });
+      setMessage(decision === "approved" ? "Task approved. Developer can upload now." : "Changes requested.");
+      fetchReviewTasks();
+    } catch (err) {
+      setError(err.response?.data?.message || "Could not review task");
+    }
+  };
 
   return (
     <>
       <h2 className="text-xl font-bold mb-4">Work Review</h2>
+      <p className="mb-6 text-slate-400">Review developer submissions before they are allowed to upload to PM.</p>
 
-      {tasks.map(task => (
-        <TaskCard key={task._id} task={task} />
-      ))}
+      {(message || error) && (
+        <div
+          className={`mb-5 rounded-lg border p-3 text-sm ${
+            error
+              ? "border-red-500/30 bg-red-500/10 text-red-200"
+              : "border-emerald-500/30 bg-emerald-500/10 text-emerald-200"
+          }`}
+        >
+          {error || message}
+        </div>
+      )}
+
+      {tasks.length === 0 ? (
+        <div className="rounded-xl border border-slate-800 bg-slate-900/80 p-6 text-center text-slate-400">
+          No submissions waiting for review.
+        </div>
+      ) : (
+        tasks.map(task => (
+          <TaskCard key={task._id} task={task}>
+            <div className="space-y-3">
+              <a
+                href={task.reviewSubmission}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-block text-sm font-semibold text-blue-300 hover:text-blue-200"
+              >
+                Open submitted work
+              </a>
+              <textarea
+                placeholder="Write changes, or write: You can upload now"
+                value={comments[task._id] || ""}
+                onChange={(e) => setComments({ ...comments, [task._id]: e.target.value })}
+                className="w-full rounded-lg border border-slate-700 bg-slate-950/70 p-3 text-sm text-white outline-none transition placeholder:text-slate-500 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/30"
+                rows={3}
+              />
+              <div className="flex flex-col gap-2 sm:flex-row">
+                <button
+                  onClick={() => reviewTask(task._id, "changes_requested")}
+                  className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-4 py-2 text-sm font-semibold text-amber-300 transition hover:bg-amber-500/20 hover:text-white"
+                >
+                  Request Changes
+                </button>
+                <button
+                  onClick={() => reviewTask(task._id, "approved")}
+                  className="rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-4 py-2 text-sm font-semibold text-emerald-300 transition hover:bg-emerald-500/20 hover:text-white"
+                >
+                  Approve Upload
+                </button>
+              </div>
+            </div>
+          </TaskCard>
+        ))
+      )}
     </>
   );
 }
 
 
 // 🔔 NOTIFICATIONS
-function Notifications() {
+function UploadOwnWork() {
+  const user = JSON.parse(localStorage.getItem("user"));
+  const userId = user?._id;
   const [tasks, setTasks] = useState([]);
+  const [submission, setSubmission] = useState({});
+  const [message, setMessage] = useState("");
+  const [error, setError] = useState("");
+
+  const fetchTasks = useCallback(async () => {
+    const res = await API.get("/tasks");
+    setTasks(
+      res.data.filter(
+        (task) => task.status === "in-progress" && (task.assignedTo?._id || task.assignedTo) === userId
+      )
+    );
+  }, [userId]);
 
   useEffect(() => {
-    API.get("/tasks").then(res => setTasks(res.data));
-  }, []);
+    let ignore = false;
+
+    API.get("/tasks").then((res) => {
+      if (ignore) return;
+      setTasks(
+        res.data.filter(
+          (task) => task.status === "in-progress" && (task.assignedTo?._id || task.assignedTo) === userId
+        )
+      );
+    });
+
+    return () => {
+      ignore = true;
+    };
+  }, [userId]);
+
+  const uploadTask = async (taskId) => {
+    setMessage("");
+    setError("");
+
+    try {
+      await API.put("/tasks/submit", {
+        taskId,
+        submission: submission[taskId],
+      });
+
+      setSubmission({ ...submission, [taskId]: "" });
+      setMessage("Task uploaded to PM.");
+      fetchTasks();
+    } catch (err) {
+      setError(err.response?.data?.message || "Could not upload task");
+    }
+  };
 
   return (
     <>
-      <h2 className="text-xl font-bold mb-4">Notifications</h2>
+      <h2 className="text-xl font-bold mb-4">Upload Work</h2>
+      <p className="mb-6 text-slate-400">Tasks assigned to you as team leader upload directly to PM.</p>
 
-      {tasks.map(task => (
-        <div key={task._id} className="bg-white p-3 mb-2 shadow">
-          {task.comments.map((c, i) => (
-            <p key={i}>📝 {c.text}</p>
-          ))}
+      {(message || error) && (
+        <div
+          className={`mb-5 rounded-lg border p-3 text-sm ${
+            error
+              ? "border-red-500/30 bg-red-500/10 text-red-200"
+              : "border-emerald-500/30 bg-emerald-500/10 text-emerald-200"
+          }`}
+        >
+          {error || message}
         </div>
-      ))}
+      )}
+
+      {tasks.length === 0 ? (
+        <div className="rounded-xl border border-slate-800 bg-slate-900/80 p-6 text-center text-slate-400">
+          No tasks assigned to you for upload.
+        </div>
+      ) : (
+        tasks.map((task) => (
+          <TaskCard key={task._id} task={task}>
+            <input
+              placeholder="Paste final work link for PM"
+              value={submission[task._id] || ""}
+              onChange={(e) => setSubmission({ ...submission, [task._id]: e.target.value })}
+              className="mt-2 w-full rounded-lg border border-slate-700 bg-slate-950/70 p-3 text-sm text-white outline-none transition placeholder:text-slate-500 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/30"
+            />
+            <button
+              onClick={() => uploadTask(task._id)}
+              className="mt-3 rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-blue-500"
+            >
+              Upload to PM
+            </button>
+          </TaskCard>
+        ))
+      )}
     </>
   );
 }
-
 
 // 📊 PERFORMANCE
 function Performance() {
@@ -134,16 +322,59 @@ function Performance() {
     API.get("/tasks").then(res => setTasks(res.data));
   }, []);
 
-  return (
-    <>
-      <h2 className="text-xl font-bold mb-4">Team Performance</h2>
+  const completed = tasks.filter(t => t.status === "completed").length;
+  const inProgress = tasks.filter(t => t.status === "in-progress").length;
+  const completionRate = tasks.length ? Math.round((completed / tasks.length) * 100) : 0;
 
-      <div className="bg-white p-4 rounded shadow">
-        <p>Total Tasks: {tasks.length}</p>
-        <p>Completed: {tasks.filter(t => t.status === "completed").length}</p>
-        <p>In Progress: {tasks.filter(t => t.status === "in-progress").length}</p>
+  const stats = [
+    { label: "Total Tasks", value: tasks.length, icon: Layers3, color: "border-blue-500/30 bg-blue-500/10 text-blue-300" },
+    { label: "Completed", value: completed, icon: CheckCircle2, color: "border-emerald-500/30 bg-emerald-500/10 text-emerald-300" },
+    { label: "In Progress", value: inProgress, icon: Clock, color: "border-amber-500/30 bg-amber-500/10 text-amber-300" },
+  ];
+
+  return (
+    <div>
+      <div className="mb-6">
+        <p className="text-sm font-semibold uppercase tracking-[0.16em] text-blue-300">Performance</p>
+        <h2 className="mt-2 text-3xl font-bold text-white">Team Performance</h2>
+        <p className="mt-2 text-slate-400">Track development task progress at a glance.</p>
       </div>
-    </>
+
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+        {stats.map((stat) => {
+          const Icon = stat.icon;
+
+          return (
+            <div key={stat.label} className="rounded-xl border border-slate-800 bg-slate-900/80 p-5 shadow-lg shadow-slate-950/20">
+              <div className="flex items-start justify-between">
+                <div>
+                  <p className="text-sm text-slate-400">{stat.label}</p>
+                  <p className="mt-2 text-4xl font-bold text-white">{stat.value}</p>
+                </div>
+                <div className={`rounded-lg border p-3 ${stat.color}`}>
+                  <Icon className="h-5 w-5" />
+                </div>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      <div className="mt-6 rounded-xl border border-slate-800 bg-slate-900/80 p-6 shadow-lg shadow-slate-950/20">
+        <div className="flex items-center justify-between gap-4">
+          <div>
+            <p className="text-sm text-slate-400">Completion Rate</p>
+            <h3 className="mt-1 text-2xl font-bold text-white">{completionRate}% complete</h3>
+          </div>
+          <div className="rounded-lg border border-blue-500/30 bg-blue-500/10 p-3 text-blue-300">
+            <BarChart3 className="h-6 w-6" />
+          </div>
+        </div>
+        <div className="mt-5 h-3 overflow-hidden rounded-full bg-slate-800">
+          <div className="h-full rounded-full bg-blue-500 transition-all" style={{ width: `${completionRate}%` }} />
+        </div>
+      </div>
+    </div>
   );
 }
 
@@ -156,6 +387,7 @@ export default function DevLeaderDashboard() {
         <Route index element={<DevLeaderHome />} />
         <Route path="tasks" element={<AllTasks />} />
         <Route path="assign" element={<AssignTasks />} />
+        <Route path="upload" element={<UploadOwnWork />} />
         <Route path="review" element={<WorkReview />} />
         <Route path="notifications" element={<Notifications />} />
         <Route path="performance" element={<Performance />} />

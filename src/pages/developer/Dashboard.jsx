@@ -3,6 +3,7 @@ import { useCallback, useEffect, useState } from "react";
 import DashboardLayout from "../../layouts/DashboardLayout";
 import API from "../../services/api";
 import TaskCard from "../../components/TaskCard";
+import Notifications from "../Notifications";
 
 
 // 🏠 HOME
@@ -41,12 +42,14 @@ function DevTasks() {
 function DevUpload() {
   const [tasks, setTasks] = useState([]);
   const [submission, setSubmission] = useState({});
+  const [message, setMessage] = useState("");
+  const [error, setError] = useState("");
 
   const fetchTasks = useCallback(async () => {
     const res = await API.get("/tasks");
 
     const filtered = res.data.filter(
-      t => t.status === "in-progress"
+      t => t.status === "in-progress" || t.status === "completed" || t.reviewSubmission
     );
 
     setTasks(filtered);
@@ -59,7 +62,7 @@ function DevUpload() {
       if (ignore) return;
 
       const filtered = res.data.filter(
-        t => t.status === "in-progress"
+        t => t.status === "in-progress" || t.status === "completed" || t.reviewSubmission
       );
 
       setTasks(filtered);
@@ -71,23 +74,106 @@ function DevUpload() {
   }, []);
 
   const submitWork = async (taskId) => {
-    await API.put("/tasks/submit", {
-      taskId,
-      submission: submission[taskId],
-    });
+    setMessage("");
+    setError("");
 
-    fetchTasks();
+    try {
+      await API.put("/tasks/submit", {
+        taskId,
+        submission: submission[taskId],
+      });
+
+      setSubmission({ ...submission, [taskId]: "" });
+      setMessage("Submission sent successfully.");
+      fetchTasks();
+    } catch (err) {
+      setError(err.response?.data?.message || "Could not submit work");
+    }
+  };
+
+  const deleteSubmission = async (taskId) => {
+    const confirmed = window.confirm("Remove this uploaded link? You can add a new one after removing it.");
+    if (!confirmed) return;
+
+    setMessage("");
+    setError("");
+
+    try {
+      await API.delete(`/tasks/${taskId}/submission`);
+      setMessage("Uploaded link removed. You can add a new one now.");
+      fetchTasks();
+    } catch (err) {
+      setError(err.response?.data?.message || "Could not remove uploaded link");
+    }
+  };
+
+  const getReviewNote = (task) => {
+    if (task.reviewStatus === "pending") return "Waiting for team leader review.";
+    if (task.reviewStatus === "changes_requested") return task.reviewComment || "Changes requested by your team leader.";
+    if (task.reviewStatus === "approved") return task.reviewComment || "Approved. You can upload to PM now.";
+    return "First submit this work to your team leader for review.";
+  };
+
+  const getButtonLabel = (task) => {
+    if (task.submission) return "Update PM Upload";
+    if (task.reviewStatus === "approved") return "Upload to PM";
+    if (task.reviewStatus === "changes_requested") return "Resubmit for Review";
+    if (task.reviewSubmission) return "Update Review Submission";
+    return "Send to Team Leader Review";
   };
 
   return (
     <>
       <h2 className="text-xl font-bold mb-4">Upload Builds</h2>
+      <p className="mb-6 text-slate-400">Developers submit to the team leader first. After approval, upload the final build to PM.</p>
+
+      {(message || error) && (
+        <div
+          className={`mb-5 rounded-lg border p-3 text-sm ${
+            error
+              ? "border-red-500/30 bg-red-500/10 text-red-200"
+              : "border-emerald-500/30 bg-emerald-500/10 text-emerald-200"
+          }`}
+        >
+          {error || message}
+        </div>
+      )}
 
       {tasks.map(task => (
         <TaskCard key={task._id} task={task}>
+          <div className="mb-3 rounded-lg border border-slate-700/60 bg-slate-950/40 p-3 text-sm text-slate-300">
+            <span className="font-semibold text-white">Review status: </span>
+            {task.reviewStatus?.replace("_", " ") || "not submitted"}
+            <p className="mt-1 text-slate-400">{getReviewNote(task)}</p>
+          </div>
+
+          {task.reviewSubmission && (
+            <a
+              href={task.reviewSubmission}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="mb-3 inline-block text-sm font-semibold text-blue-300 hover:text-blue-200"
+            >
+              View review submission
+            </a>
+          )}
+
+          {task.submission && (
+            <a
+              href={task.submission}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="mb-3 ml-0 block text-sm font-semibold text-emerald-300 hover:text-emerald-200"
+            >
+              View PM upload
+            </a>
+          )}
+
           <input
-            placeholder="Paste link"
-            className="border p-2 w-full mt-2"
+            placeholder={task.reviewStatus === "approved" ? "Paste final deploy/build link for PM" : "Paste build link for team leader review"}
+            value={submission[task._id] || ""}
+            disabled={task.reviewStatus === "pending" && !task.submission}
+            className="mt-2 w-full rounded-lg border border-slate-700 bg-slate-950/70 p-3 text-sm text-white outline-none transition placeholder:text-slate-500 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/30 disabled:cursor-not-allowed disabled:opacity-60"
             onChange={(e) =>
               setSubmission({ ...submission, [task._id]: e.target.value })
             }
@@ -95,10 +181,20 @@ function DevUpload() {
 
           <button
             onClick={() => submitWork(task._id)}
-            className="bg-blue-600 text-white px-4 py-2 mt-2"
+            disabled={task.reviewStatus === "pending" && !task.submission}
+            className="mt-3 rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-blue-500 disabled:cursor-not-allowed disabled:opacity-60"
           >
-            Submit
+            {getButtonLabel(task)}
           </button>
+
+          {(task.reviewSubmission || task.submission) && (
+            <button
+              onClick={() => deleteSubmission(task._id)}
+              className="ml-2 mt-3 rounded-lg border border-red-500/30 bg-red-500/10 px-4 py-2 text-sm font-semibold text-red-300 transition hover:bg-red-500/20 hover:text-white"
+            >
+              Delete Upload
+            </button>
+          )}
         </TaskCard>
       ))}
     </>
@@ -138,7 +234,7 @@ function DevRevisions() {
   useEffect(() => {
     API.get("/tasks").then(res => {
       const revisions = res.data.filter(
-        t => t.comments.length > 0
+        t => (t.comments || []).length > 0 || t.reviewStatus === "changes_requested" || t.reviewComment
       );
       setTasks(revisions);
     });
@@ -148,40 +244,37 @@ function DevRevisions() {
     <>
       <h2 className="text-xl font-bold mb-4">Revisions</h2>
 
-      {tasks.map(task => (
-        <TaskCard key={task._id} task={task} />
-      ))}
+      {tasks.length === 0 ? (
+        <div className="rounded-xl border border-slate-800 bg-slate-900/80 p-6 text-center text-slate-400">
+          No revisions or comments yet.
+        </div>
+      ) : (
+        tasks.map(task => (
+          <TaskCard key={task._id} task={task}>
+            <div className="space-y-3">
+              {task.reviewComment && (
+                <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 p-3 text-sm text-amber-100">
+                  <p className="font-semibold">Team leader review</p>
+                  <p className="mt-1">{task.reviewComment}</p>
+                </div>
+              )}
+
+              {(task.comments || []).map((comment, index) => (
+                <div key={index} className="rounded-lg border border-slate-700 bg-slate-950/50 p-3 text-sm text-slate-300">
+                  <p>{comment.text}</p>
+                  {comment.date && <p className="mt-1 text-xs text-slate-500">{new Date(comment.date).toLocaleString()}</p>}
+                </div>
+              ))}
+            </div>
+          </TaskCard>
+        ))
+      )}
     </>
   );
 }
 
 
 // 🔔 NOTIFICATIONS
-function DevNotifications() {
-  const [tasks, setTasks] = useState([]);
-
-  useEffect(() => {
-    API.get("/tasks").then(res => setTasks(res.data));
-  }, []);
-
-  return (
-    <>
-      <h2 className="text-xl font-bold mb-4">Notifications</h2>
-
-      {tasks.map(task => (
-        <div key={task._id} className="bg-white p-4 mb-2 shadow">
-          {task.comments.map((c, i) => (
-            <p key={i}>
-              📝 Comment: {c.text}
-            </p>
-          ))}
-        </div>
-      ))}
-    </>
-  );
-}
-
-
 // MAIN
 export default function DeveloperDashboard() {
   return (
@@ -192,7 +285,7 @@ export default function DeveloperDashboard() {
         <Route path="upload" element={<DevUpload />} />
         <Route path="history" element={<DevHistory />} />
         <Route path="revisions" element={<DevRevisions />} />
-        <Route path="notifications" element={<DevNotifications />} />
+        <Route path="notifications" element={<Notifications />} />
       </Routes>
     </DashboardLayout>
   );

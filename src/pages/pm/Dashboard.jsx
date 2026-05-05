@@ -1,19 +1,32 @@
 import { Routes, Route } from "react-router-dom";
-import { useCallback, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
+import { Plus, X, Link as LinkIcon, Send, Sparkles, Trash2 } from "lucide-react";
 import DashboardLayout from "../../layouts/DashboardLayout";
+import { Input, Button, Textarea, Select, Badge, Card, Alert } from "../../components/FormComponents";
 import API from "../../services/api";
 import TaskCard from "../../components/TaskCard";
+import Notifications from "../Notifications";
 
 function PMHome() {
   const user = JSON.parse(localStorage.getItem("user"));
 
   return (
-    <>
-      <h2 className="text-2xl font-bold mb-6">Welcome {user?.name} 👋</h2>
-      <div className="bg-white rounded-2xl p-8 shadow-sm">
-        <p className="text-gray-600">Use the sidebar to create tasks and review submitted work.</p>
+    <div>
+      <div className="mb-8">
+        <h1 className="text-4xl font-bold text-white mb-2">Welcome back, {user?.name}! 👋</h1>
+        <p className="text-slate-400">Manage your projects and create new tasks</p>
       </div>
-    </>
+
+      <Card>
+        <div className="flex items-center gap-4">
+          <Sparkles className="w-12 h-12 text-purple-400 flex-shrink-0" />
+          <div>
+            <h2 className="text-xl font-bold text-white mb-1">Get Started</h2>
+            <p className="text-slate-400">Use the sidebar to create tasks and review submitted work from your team.</p>
+          </div>
+        </div>
+      </Card>
+    </div>
   );
 }
 
@@ -21,55 +34,177 @@ function PMTasks() {
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [department, setDepartment] = useState("development");
+  const [services, setServices] = useState([]);
+  const [media, setMedia] = useState([]);
+  const [serviceInput, setServiceInput] = useState("");
+  const [mediaInput, setMediaInput] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [success, setSuccess] = useState(false);
+
+  const addService = () => {
+    if (serviceInput.trim()) {
+      setServices([...services, serviceInput.trim()]);
+      setServiceInput("");
+    }
+  };
+
+  const addMedia = () => {
+    if (mediaInput.trim()) {
+      setMedia([...media, mediaInput.trim()]);
+      setMediaInput("");
+    }
+  };
+
+  const removeService = (index) => {
+    setServices(services.filter((_, i) => i !== index));
+  };
+
+  const removeMedia = (index) => {
+    setMedia(media.filter((_, i) => i !== index));
+  };
 
   const createTask = async (e) => {
     e.preventDefault();
+    setLoading(true);
 
-    await API.post("/tasks", {
-      title,
-      description,
-      department,
-    });
+    try {
+      await API.post("/tasks", {
+        title,
+        description,
+        services,
+        media,
+        department,
+      });
 
-    alert("Task created");
-    setTitle("");
-    setDescription("");
+      setSuccess(true);
+      setTitle("");
+      setDescription("");
+      setServices([]);
+      setMedia([]);
+
+      setTimeout(() => setSuccess(false), 3000);
+    } catch (error) {
+      console.error("Error creating task:", error);
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
-    <>
-      <h2 className="text-2xl font-bold mb-6">Create Task</h2>
+    <div>
+      <h1 className="text-4xl font-bold text-white mb-2">Create Task</h1>
+      <p className="text-slate-400 mb-8">Set up a new task for your team members</p>
 
-      <form onSubmit={createTask} className="bg-white rounded-2xl p-6 shadow-sm space-y-4">
-        <input
-          className="w-full border p-3 rounded-xl"
-          placeholder="Task title"
-          value={title}
-          onChange={(e) => setTitle(e.target.value)}
-          required
-        />
+      {success && (
+        <Alert variant="success">
+          ✨ Task created successfully! Your team will be notified.
+        </Alert>
+      )}
 
-        <textarea
-          className="w-full border p-3 rounded-xl min-h-[120px]"
-          placeholder="Task description"
-          value={description}
-          onChange={(e) => setDescription(e.target.value)}
-        />
+      <Card className="mt-6">
+        <form onSubmit={createTask} className="space-y-6">
+          {/* Title */}
+          <Input
+            label="Task Title"
+            type="text"
+            placeholder="Enter task title"
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+            required
+          />
 
-        <select
-          className="w-full border p-3 rounded-xl"
-          value={department}
-          onChange={(e) => setDepartment(e.target.value)}
-        >
-          <option value="development">Development</option>
-          <option value="designing">Designing</option>
-        </select>
+          {/* Description */}
+          <Textarea
+            label="Task Description"
+            placeholder="Describe what needs to be done..."
+            rows={5}
+            value={description}
+            onChange={(e) => setDescription(e.target.value)}
+            required
+          />
 
-        <button className="bg-blue-600 text-white font-bold px-6 py-3 rounded-xl">
-          Add Task
-        </button>
-      </form>
-    </>
+          {/* Department */}
+          <Select
+            label="Department"
+            value={department}
+            onChange={(e) => setDepartment(e.target.value)}
+            options={[
+              { label: "Development", value: "development" },
+              { label: "Design", value: "designing" },
+            ]}
+          />
+
+          {/* Services */}
+          <div>
+            <label className="block text-sm font-semibold text-slate-200 mb-2">Services Required</label>
+            <div className="flex gap-2 mb-3">
+              <input
+                type="text"
+                placeholder="Add service (e.g., Frontend, Backend)"
+                value={serviceInput}
+                onChange={(e) => setServiceInput(e.target.value)}
+                className="flex-1 px-4 py-3 bg-slate-700/50 border border-slate-600/50 rounded-xl text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent transition"
+                onKeyPress={(e) => e.key === "Enter" && (e.preventDefault(), addService())}
+              />
+              <Button type="button" onClick={addService} icon={Plus} size="md">
+                Add
+              </Button>
+            </div>
+            {services.length > 0 && (
+              <div className="flex flex-wrap gap-2">
+                {services.map((service, i) => (
+                  <Badge key={i} variant="info">
+                    <div className="flex items-center gap-2">
+                      {service}
+                      <button type="button" onClick={() => removeService(i)}>
+                        <X className="w-3 h-3" />
+                      </button>
+                    </div>
+                  </Badge>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Media */}
+          <div>
+            <label className="block text-sm font-semibold text-slate-200 mb-2">Media / References</label>
+            <div className="flex gap-2 mb-3">
+              <input
+                type="url"
+                placeholder="Paste media/reference link"
+                value={mediaInput}
+                onChange={(e) => setMediaInput(e.target.value)}
+                className="flex-1 px-4 py-3 bg-slate-700/50 border border-slate-600/50 rounded-xl text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent transition"
+                onKeyPress={(e) => e.key === "Enter" && (e.preventDefault(), addMedia())}
+              />
+              <Button type="button" onClick={addMedia} icon={LinkIcon} size="md">
+                Add
+              </Button>
+            </div>
+            {media.length > 0 && (
+              <div className="space-y-2">
+                {media.map((link, i) => (
+                  <div key={i} className="flex items-center justify-between p-3 bg-slate-700/30 rounded-lg border border-slate-600/30">
+                    <a href={link} target="_blank" rel="noopener noreferrer" className="text-purple-400 hover:text-purple-300 text-sm truncate">
+                      {link}
+                    </a>
+                    <button type="button" onClick={() => removeMedia(i)} className="text-slate-500 hover:text-slate-300">
+                      <X className="w-4 h-4" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Submit Button */}
+          <Button loading={loading} icon={Send} variant="primary" size="lg" className="w-full">
+            Create Task
+          </Button>
+        </form>
+      </Card>
+    </div>
   );
 }
 
@@ -77,18 +212,94 @@ function PMReview() {
   const [tasks, setTasks] = useState([]);
   const [comment, setComment] = useState({});
 
-  const fetchTasks = useCallback(async () => {
-    const res = await API.get("/tasks");
-    setTasks(res.data.filter((task) => task.submission));
+  useEffect(() => {
+    const fetchTasks = async () => {
+      try {
+        const res = await API.get("/tasks");
+        setTasks(res.data.filter((task) => task.submission));
+      } catch (error) {
+        console.error("Error fetching tasks:", error);
+      }
+    };
+    fetchTasks();
   }, []);
+
+  const addComment = async (taskId) => {
+    if (!comment[taskId]?.trim()) return;
+
+    try {
+      await API.post("/tasks/comment", {
+        taskId,
+        text: comment[taskId],
+      });
+
+      setComment({ ...comment, [taskId]: "" });
+
+      // Refetch tasks after comment
+      const fetchTasks = async () => {
+        try {
+          const res = await API.get("/tasks");
+          setTasks(res.data.filter((task) => task.submission));
+        } catch (error) {
+          console.error("Error fetching tasks:", error);
+        }
+      };
+      fetchTasks();
+    } catch (error) {
+      console.error("Error adding comment:", error);
+    }
+  };
+
+  return (
+    <div>
+      <h1 className="text-4xl font-bold text-white mb-2">Work Review</h1>
+      <p className="text-slate-400 mb-8">Review and provide feedback on team submissions</p>
+
+      {tasks.length === 0 ? (
+        <Card>
+          <p className="text-slate-400 text-center">No tasks pending review</p>
+        </Card>
+      ) : (
+        <div className="space-y-4">
+          {tasks.map((task) => (
+            <TaskCard key={task._id} task={task}>
+              <div className="mt-4 flex gap-2">
+                <input
+                  type="text"
+                  placeholder="Add your feedback..."
+                  value={comment[task._id] || ""}
+                  onChange={(e) => setComment({ ...comment, [task._id]: e.target.value })}
+                  className="flex-1 px-4 py-2 bg-slate-700/50 border border-slate-600/50 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent transition text-sm"
+                  onKeyPress={(e) => e.key === "Enter" && (e.preventDefault(), addComment(task._id))}
+                />
+                <Button onClick={() => addComment(task._id)} icon={Send} size="sm">
+                  Send
+                </Button>
+              </div>
+            </TaskCard>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function PMProjects() {
+  const [tasks, setTasks] = useState([]);
+  const [message, setMessage] = useState("");
+  const [error, setError] = useState("");
+
+  const fetchTasks = async () => {
+    const res = await API.get("/tasks");
+    setTasks(res.data);
+  };
 
   useEffect(() => {
     let ignore = false;
 
     API.get("/tasks").then((res) => {
-      if (!ignore) {
-        setTasks(res.data.filter((task) => task.submission));
-      }
+      if (ignore) return;
+      setTasks(res.data);
     });
 
     return () => {
@@ -96,72 +307,55 @@ function PMReview() {
     };
   }, []);
 
-  const addComment = async (taskId) => {
-    if (!comment[taskId]) return;
+  const deleteTask = async (taskId) => {
+    const confirmed = window.confirm("Delete this task? It will no longer be visible to assigned team leaders or team members.");
+    if (!confirmed) return;
 
-    await API.post("/tasks/comment", {
-      taskId,
-      text: comment[taskId],
-    });
+    setMessage("");
+    setError("");
 
-    setComment({ ...comment, [taskId]: "" });
-    fetchTasks();
+    try {
+      await API.delete(`/tasks/${taskId}`);
+      setMessage("Task deleted successfully.");
+      fetchTasks();
+    } catch (err) {
+      setError(err.response?.data?.message || "Could not delete task");
+    }
   };
 
   return (
-    <>
-      <h2 className="text-2xl font-bold mb-6">Work Review</h2>
+    <div>
+      <h1 className="text-4xl font-bold text-white mb-2">Projects</h1>
+      <p className="text-slate-400 mb-8">Manage all your active projects</p>
 
-      <div className="grid gap-4">
+      {(message || error) && (
+        <div
+          className={`mb-5 rounded-lg border p-3 text-sm ${
+            error
+              ? "border-red-500/30 bg-red-500/10 text-red-200"
+              : "border-emerald-500/30 bg-emerald-500/10 text-emerald-200"
+          }`}
+        >
+          {error || message}
+        </div>
+      )}
+
+      <div className="space-y-4">
         {tasks.map((task) => (
           <TaskCard key={task._id} task={task}>
-            <div className="mt-4 flex gap-2">
-              <input
-                className="flex-1 border p-3 rounded-xl"
-                placeholder="Add comment"
-                value={comment[task._id] || ""}
-                onChange={(e) =>
-                  setComment({ ...comment, [task._id]: e.target.value })
-                }
-              />
-
+            <div className="flex justify-end">
               <button
-                onClick={() => addComment(task._id)}
-                className="bg-purple-600 text-white px-5 rounded-xl"
+                onClick={() => deleteTask(task._id)}
+                className="inline-flex items-center justify-center gap-2 rounded-lg border border-red-500/30 bg-red-500/10 px-4 py-2 text-sm font-semibold text-red-300 transition hover:bg-red-500/20 hover:text-white"
               >
-                Comment
+                <Trash2 className="h-4 w-4" />
+                Delete Task
               </button>
             </div>
           </TaskCard>
         ))}
       </div>
-    </>
-  );
-}
-
-function Placeholder({ title }) {
-  return (
-    <div className="bg-white rounded-2xl shadow-sm p-8">
-      <h2 className="text-2xl font-bold">{title}</h2>
-      <p className="text-gray-500 mt-2">This section will be connected later.</p>
     </div>
-  );
-}
-function PMProjects() {
-  const [tasks, setTasks] = useState([]);
-
-  useEffect(() => {
-    API.get("/tasks").then(res => setTasks(res.data));
-  }, []);
-
-  return (
-    <>
-      <h2 className="text-xl font-bold mb-4">Projects</h2>
-
-      {tasks.map(task => (
-        <TaskCard key={task._id} task={task} />
-      ))}
-    </>
   );
 }
 
@@ -173,7 +367,10 @@ export default function PMDashboard() {
         <Route path="projects" element={<PMProjects />} />
         <Route path="tasks" element={<PMTasks />} />
         <Route path="review" element={<PMReview />} />
-        <Route path="notifications" element={<Placeholder title="Notifications" />} />
+        <Route
+          path="notifications"
+          element={<Notifications />}
+        />
       </Routes>
     </DashboardLayout>
   );
